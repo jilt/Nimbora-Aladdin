@@ -44,6 +44,11 @@
       "underlying": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
       "bridge": "0x9F96fE0633eE838D0298E8b8980E6716bE81388d"
     },
+    "aladdin": {
+      "strategy": "",
+      "underlying": "0xD533a949740bb3306d119CC777fa900bA034cd52",
+      "bridge": "0xF5b6Ee2CAEb6769659f6C091D209DfdCaF3F69Eb"
+    },
     "uniStrategy": {
       "strategy": "",
       "underlying": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
