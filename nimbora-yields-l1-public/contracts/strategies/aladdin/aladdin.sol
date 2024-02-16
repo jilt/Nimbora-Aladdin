@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-// 1) convert WETH to CRV on uniswap v3
+// 1) convert WETH to CRV and back on uniswap v3
 // 2) stake CRV for cvxCRV(aCRV) (18 decimals)
 
 import {StrategyBase} from "../StrategyBase.sol";
@@ -21,8 +21,7 @@ interface IUniSwapRouter is ISwapRouter {
 
 contract UniswapV3Strategy is StrategyBase {
 
-
-// Step 1
+// 1
 
     IUniSwapRouter public immutable swapRouter;
     IQuoter public immutable quoter;
@@ -30,36 +29,44 @@ contract UniswapV3Strategy is StrategyBase {
     address public constant CRV = 0xD533a949740bb3306d119CC777fa900bA034cd52;
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
-    // Set the pool fee to 1%.
-    uint24 public constant poolFee = 10000;
+    // Set the pool fee to 0.3%.
+    uint24 public constant poolFee = 3000;
 
     constructor() initializer {
         swapRouter = IUniSwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
         quoter = IQuoter(0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6);
     }
 
-    // get quote
+    function initialize(
+        address public constant _poolingManager,
+        address public constant _underlyingToken = 0xD533a949740bb3306d119CC777fa900bA034cd52,
+        address public constant _yieldToken  = 0x2b95A1Dcc3D405535f9ed33c219ab38E8d7e0884
+    ) public virtual initializer {
+        initializeStrategyBase(_poolingManager, _underlyingToken, _yieldToken);
+        _checkAndInitSavingCRV(_underlyingToken, _yieldToken);
+    }
 
-    function getETHforCRV(uint256 _CRVAmount)
+    // get quote for bridged WETH
+
+    function getCRVforWETH(uint256 _WETHAmount)
         external
         payable
         returns (uint256)
     {
         return (
-            quoter.quoteExactOutputSingle({
+            quoter.quoteExactInputSingle.call({
                 tokenIn: WETH,
                 tokenOut: CRV,
-                fee: 500, // 0.05 percent fee
-                amountOut: _CRVAmount,
+                fee: poolFee,
+                amountIn: _WETHAmount,
                 sqrtPriceLimitX96: 0
             })
         );
     }
-
     // Used to accept swapRouter refund
     receive() external payable {}
 
-    // swap
+    // swap WETH
 
     function convertExactEthToCRV(uint256 _deadline)
         external
@@ -75,33 +82,63 @@ contract UniswapV3Strategy is StrategyBase {
                 recipient: msg.sender,
                 deadline: _deadline,
                 amountIn: msg.value,
-                amountOutMinimum: getETHforCRV(), // setting zero now but in production use price oracle to detemine amount minimum
+                amountOutMinimum: getCRVforWETH(msg.value),
                 sqrtPriceLimitX96: 0
             });
 
         return (swapRouter.exactInputSingle{value: msg.value}(_params));
     }
 
-    // step 2
-    // underlying token CRV
-    // yield token crvxCRV(aCRV)
+    // get quote for redeemed CRV
 
-    function initialize(
-        address public constant _poolingManager,
-        address public constant _underlyingToken = 0xD533a949740bb3306d119CC777fa900bA034cd52,
-        address public constant _yieldToken  = 0x2b95A1Dcc3D405535f9ed33c219ab38E8d7e0884
-    ) public virtual initializer {
-        initializeStrategyBase(_poolingManager, _underlyingToken, _yieldToken);
-        _checkAndInitSavingCRV(_underlyingToken, _yieldToken);
+    function getWETHforCRV(uint256 _CRVAmount)
+        external
+        payable
+        returns (uint256)
+    {
+        return (
+            quoter.quoteExactInputSingle.call({
+                tokenIn: CRV,
+                tokenOut: WETH,
+                fee: poolFee,
+                amountIn: _CRVAmount,
+                sqrtPriceLimitX96: 0
+            })
+        );
     }
+
+    // swap CRV
+
+    function convertExactCRVToEth(uint256 _deadline)
+        external
+        payable
+        returns (uint256)
+    {
+        require(msg.value > 0, "Error, CRV amount in must be greater than 0");
+        ISwapRouter.ExactInputSingleParams memory _params = ISwapRouter
+            .ExactInputSingleParams({
+                tokenIn: CRV,
+                tokenOut: WETH,
+                fee: poolFee,
+                recipient: msg.sender,
+                deadline: _deadline,
+                amountIn: msg.value,
+                amountOutMinimum: getETHforCRV(msg.value),
+                sqrtPriceLimitX96: 0
+            });
+
+        return (swapRouter.exactInputSingle{value: msg.value}(_params));
+    }
+
+    // 2
+    // underlying token CRV
+    // yield token aCRV
 
     function _checkAndInitSavingCRV(address _underlyingToken, address _yieldToken) internal {
         address CRV = IAladdin(_yieldToken).aladdin();
         require(CRV == _underlyingToken, "Invalid underlying: AladdinDao Strategy");
         IERC20(_underlyingToken).approve(_yieldToken, type(uint256).max);
     }
-
-    // changed deposit function based on the aCRV contract
 
     function _deposit(uint256 amount) internal override returns (uint256){
         IAladdin(yieldToken).depositWithCRV(address(this), uint256 amount);
@@ -121,12 +158,11 @@ contract UniswapV3Strategy is StrategyBase {
         }
     }
 
-     _underlyingToYield(uint256 amount) internal view override returns (uint256) {
+    function _underlyingToYield(uint256 amount) internal view override returns (uint256) {
         return IAladdin(yieldToken).previewDeposit(amount);
     }
 
     function _yieldToUnderlying(uint256 amount) internal view override returns (uint256) {
         return IAladdin(yieldToken).previewRedeem(amount);
     }
-
 }
