@@ -40,8 +40,8 @@ contract UniswapV3Strategy is StrategyBase {
 
         function initialize(
         address constant _poolingManager,
-        address constant _underlyingToken = 0xD533a949740bb3306d119CC777fa900bA034cd52,
-        address constant _yieldToken  = 0x2b95A1Dcc3D405535f9ed33c219ab38E8d7e0884
+        address constant _underlyingToken,
+        address constant _yieldToken
     ) public virtual initializer {
         initializeStrategyBase(_poolingManager, _underlyingToken, _yieldToken);
         _checkAndInitSavingCRV(_underlyingToken, _yieldToken);
@@ -163,7 +163,7 @@ contract UniswapV3Strategy is StrategyBase {
         }
     }
 
-     _underlyingToYield(uint256 amount) internal view override returns (uint256) {
+    function _underlyingToYield(uint256 amount) internal view override returns (uint256) {
         return IAladdin(yieldToken).previewDeposit(amount);
     }
 
