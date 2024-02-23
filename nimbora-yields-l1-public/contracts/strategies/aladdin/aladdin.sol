@@ -21,6 +21,7 @@ interface IUniSwapRouter is ISwapRouter {
 
 contract UniswapV3Strategy is StrategyBase {
 
+
 // 1
 
     IUniSwapRouter public immutable swapRouter;
@@ -32,15 +33,15 @@ contract UniswapV3Strategy is StrategyBase {
     // Set the pool fee to 0.3%.
     uint24 public constant poolFee = 3000;
 
-    constructor() initializer {
+    constructor() {
         swapRouter = IUniSwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
         quoter = IQuoter(0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6);
     }
 
-    function initialize(
-        address public constant _poolingManager,
-        address public constant _underlyingToken = 0xD533a949740bb3306d119CC777fa900bA034cd52,
-        address public constant _yieldToken  = 0x2b95A1Dcc3D405535f9ed33c219ab38E8d7e0884
+        function initialize(
+        address constant _poolingManager,
+        address constant _underlyingToken = 0xD533a949740bb3306d119CC777fa900bA034cd52,
+        address constant _yieldToken  = 0x2b95A1Dcc3D405535f9ed33c219ab38E8d7e0884
     ) public virtual initializer {
         initializeStrategyBase(_poolingManager, _underlyingToken, _yieldToken);
         _checkAndInitSavingCRV(_underlyingToken, _yieldToken);
@@ -57,7 +58,7 @@ contract UniswapV3Strategy is StrategyBase {
             quoter.quoteExactInputSingle.call({
                 tokenIn: WETH,
                 tokenOut: CRV,
-                fee: poolFee,
+                fee: 3000, // 0.3 percent fee
                 amountIn: _WETHAmount,
                 sqrtPriceLimitX96: 0
             })
@@ -100,7 +101,7 @@ contract UniswapV3Strategy is StrategyBase {
             quoter.quoteExactInputSingle.call({
                 tokenIn: CRV,
                 tokenOut: WETH,
-                fee: poolFee,
+                fee: 3000, // 0.3 percent fee
                 amountIn: _CRVAmount,
                 sqrtPriceLimitX96: 0
             })
@@ -130,9 +131,11 @@ contract UniswapV3Strategy is StrategyBase {
         return (swapRouter.exactInputSingle{value: msg.value}(_params));
     }
 
+
     // 2
     // underlying token CRV
     // yield token aCRV
+
 
     function _checkAndInitSavingCRV(address _underlyingToken, address _yieldToken) internal {
         address CRV = IAladdin(_yieldToken).aladdin();
@@ -140,8 +143,10 @@ contract UniswapV3Strategy is StrategyBase {
         IERC20(_underlyingToken).approve(_yieldToken, type(uint256).max);
     }
 
+    // changed deposit function based on the aCRV contract
+
     function _deposit(uint256 amount) internal override returns (uint256){
-        IAladdin(yieldToken).depositWithCRV(address(this), uint256 amount);
+        IAladdin(yieldToken).depositWithCRV(address(this), amount);
         // amount of yield tokens received
         return (amount);
     }
@@ -158,11 +163,12 @@ contract UniswapV3Strategy is StrategyBase {
         }
     }
 
-    function _underlyingToYield(uint256 amount) internal view override returns (uint256) {
+     _underlyingToYield(uint256 amount) internal view override returns (uint256) {
         return IAladdin(yieldToken).previewDeposit(amount);
     }
 
     function _yieldToUnderlying(uint256 amount) internal view override returns (uint256) {
         return IAladdin(yieldToken).previewRedeem(amount);
     }
+
 }
